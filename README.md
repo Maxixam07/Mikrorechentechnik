@@ -1,3 +1,3 @@
-# Mikrorechentechnik
+# Mikrorechentechnik EET-2
 
 
