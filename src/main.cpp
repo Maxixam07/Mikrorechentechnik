@@ -9,7 +9,6 @@ int U_null_interrupt = 9; // Pin 9, Interruptf¨ahiger Pin: Messung des Spannung
 int LED_1 = 14;           // Pin 14, Ausgangspin: Kann die Led1 an- und ausschalten. Led leuchtet, wenn Pin auf high.
 int LED_2 = 15;           // Pin 15, Ausgangspin: Kann die Led2 an- und ausschalten. Led leuchtet, wenn Pin auf high.
 
-bool U_null_trans = false; // Flag, die false gesetzt wird, wenn U_null Low ist, also kurz vor dem Spannungsnulldurchgang
 long zuendverz_micros = 0;   // Zündverzögerung in Mikrosekunden, bei 50 Hz ist die Dauer zwischen zwei Nulldurchgängen 10000 Mikrosekunden
 bool Taster_1_prev = false;
 bool Taster_2_prev = false;
@@ -23,6 +22,12 @@ long zuendverz_min = (long)zuendwinkel_min * halbwelle_micros/180; //Umrechnung 
 long zuendverz_max = (long)zuendwinkel_max* halbwelle_micros/180;
 long zuendverz_schrittweite = (long)zuendwinkel_schrittweite * halbwelle_micros/180;
 
+volatile bool nulldurchgang = false; //Flag für Nulldurchgang, volatile damit sie in der ISR und in loop funktioniert
+
+void nulldurchgang_ISR(){ //Interrupt Service Routine, wird ausgeführt wenn Pin 9 Interrupt wirft
+  nulldurchgang = true;
+}
+
     void setup()
 {
   // Pins initialisieren
@@ -33,6 +38,8 @@ long zuendverz_schrittweite = (long)zuendwinkel_schrittweite * halbwelle_micros/
   pinMode(U_null_interrupt, INPUT);
   pinMode(LED_1, OUTPUT);
   pinMode(LED_2, OUTPUT);
+
+  attachInterrupt(digitalPinToInterrupt(U_null_interrupt), nulldurchgang_ISR, RISING); //Interrupt
 }
 
 void loop()
@@ -53,15 +60,9 @@ void loop()
   Taster_1_prev = Taster_1_aktuell; //aktuellen Tasterzustand für nächsten Durchlauf speichern
   Taster_2_prev = Taster_2_aktuell;
 
-  if (digitalRead(U_null) == LOW) // U_null wird low, Spannungsnulldurchgang steht bevor
+  if (nulldurchgang)
   {
-    U_null_trans = true;
-  }
-
-
-  if (digitalRead(U_null) == HIGH && U_null_trans) // Wenn U_null zuvor LOW war und nun HIGH ist, ist der Spannungsnulldurchgang passiert
-  {
-    U_null_trans = false;                 //Flag zurücksetzen
+    nulldurchgang = false;                 //Flag zurücksetzen
     delayMicroseconds(zuendverz_micros);  //Zuendverzoegerung abwarten
     digitalWrite(iG_out, HIGH);           //Triac einschalten
     delayMicroseconds(10);                //Warten bis Einraststrom erreicht
