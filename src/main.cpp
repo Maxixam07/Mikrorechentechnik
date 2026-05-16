@@ -1,7 +1,7 @@
 #include <Arduino.h>
 
 // PINS
-int Taster_1 = 0;         // Pin 0, Eingangspin: Erkennt Tastendruck auf Taster 1. Wird high, wenn Taster gedrueckt
+int Taster_1 = 0;         // Pin 0, Eingangspin: Erkennt Tastendruck auf Taster 1. Wird high, wenn Taster gedrueckt.
 int Taster_2 = 1;         // Pin 1, Eingangspin: Erkennt Tastendruck auf Taster 2. Wird high, wenn Taster gedruckt.
 int iG_out = 3;           // Pin 3, Ausgangspin: Pr¨agt einen Gatestrom in den Triac ein, wenn auf high.
 int U_null = 6;           // Pin 6, Eingangspin: Messung des Spannungsnulldurchgangs, wird zum Zeitpunkt des Spannungsnulldurchgangs high.
@@ -10,7 +10,10 @@ int LED_1 = 14;           // Pin 14, Ausgangspin: Kann die Led1 an- und ausschal
 int LED_2 = 15;           // Pin 15, Ausgangspin: Kann die Led2 an- und ausschalten. Led leuchtet, wenn Pin auf high.
 
 bool U_null_trans = false; // Flag, die false gesetzt wird, wenn U_null Low ist, also kurz vor dem Spannungsnulldurchgang
-int zuendverz_micros = 5000;   // Zündverzögerung in Mikrosekunden, bei 50 Hz ist die Dauer zwischen zwei Nulldurchgängen 10000 Mikrosekunden
+int zuendverz_micros = 0;   // Zündverzögerung in Mikrosekunden, bei 50 Hz ist die Dauer zwischen zwei Nulldurchgängen 10000 Mikrosekunden
+bool Taster_1_prev = false;
+bool Taster_2_prev = false;
+int zuendverz_schrittweite = 500; //Zündverzögerungs-Schritt pro Tastendruck, 5000 µs = 90°, 500 µs = 9°
 
     void setup()
 {
@@ -26,10 +29,27 @@ int zuendverz_micros = 5000;   // Zündverzögerung in Mikrosekunden, bei 50 Hz 
 
 void loop()
 {
+  bool Taster_1_aktuell = digitalRead(Taster_1); 
+  bool Taster_2_aktuell = digitalRead(Taster_2);
+
+  if (Taster_1_aktuell && !Taster_1_prev){
+    zuendverz_micros = zuendverz_micros - zuendverz_schrittweite;
+  }
+
+  if (Taster_2_aktuell && !Taster_2_prev){
+    zuendverz_micros = zuendverz_micros + zuendverz_schrittweite;
+  }
+
+  zuendverz_micros = constrain(zuendverz_micros, 0, 10000);
+
+  Taster_1_prev = Taster_1_aktuell;
+  Taster_2_prev = Taster_2_aktuell;
+
   if (digitalRead(U_null) == LOW) // U_null wird low, Spannungsnulldurchgang steht bevor
   {
     U_null_trans = true;
   }
+
 
   if (digitalRead(U_null) == HIGH && U_null_trans) // Wenn U_null zuvor LOW war und nun HIGH ist, ist der Spannungsnulldurchgang passiert
   {
