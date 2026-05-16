@@ -10,10 +10,18 @@ int LED_1 = 14;           // Pin 14, Ausgangspin: Kann die Led1 an- und ausschal
 int LED_2 = 15;           // Pin 15, Ausgangspin: Kann die Led2 an- und ausschalten. Led leuchtet, wenn Pin auf high.
 
 bool U_null_trans = false; // Flag, die false gesetzt wird, wenn U_null Low ist, also kurz vor dem Spannungsnulldurchgang
-int zuendverz_micros = 0;   // Zündverzögerung in Mikrosekunden, bei 50 Hz ist die Dauer zwischen zwei Nulldurchgängen 10000 Mikrosekunden
+long zuendverz_micros = 0;   // Zündverzögerung in Mikrosekunden, bei 50 Hz ist die Dauer zwischen zwei Nulldurchgängen 10000 Mikrosekunden
 bool Taster_1_prev = false;
 bool Taster_2_prev = false;
-int zuendverz_schrittweite = 500; //Zündverzögerungs-Schritt pro Tastendruck, 5000 µs = 90°, 500 µs = 9°
+int freq = 50;                    //Frequenz der Versorgungsspannung in Hz
+int zuendwinkel_min = 0;          //Minimal einstellbarer Zündwinkel in Grad
+int zuendwinkel_max = 180;        //Maximal einstellbarer Zündwinkel in Grad
+int zuendwinkel_schrittweite = 5; //Schrittweite des Zündwinkels bei Tastendruck
+
+long halbwelle_micros = 1000000 /(2*freq);
+long zuendverz_min = (long)zuendwinkel_min * halbwelle_micros/180; //Umrechnung Zündwinkel in Zündverzögerung
+long zuendverz_max = (long)zuendwinkel_max* halbwelle_micros/180;
+long zuendverz_schrittweite = (long)zuendwinkel_schrittweite * halbwelle_micros/180;
 
     void setup()
 {
@@ -29,20 +37,20 @@ int zuendverz_schrittweite = 500; //Zündverzögerungs-Schritt pro Tastendruck, 
 
 void loop()
 {
-  bool Taster_1_aktuell = digitalRead(Taster_1); 
+  bool Taster_1_aktuell = digitalRead(Taster_1); //aktuellen Zustand der Taster in bool speichern
   bool Taster_2_aktuell = digitalRead(Taster_2);
 
-  if (Taster_1_aktuell && !Taster_1_prev){
-    zuendverz_micros = zuendverz_micros - zuendverz_schrittweite;
+  if (Taster_1_aktuell && !Taster_1_prev){      //wenn Taster 1 vorher nicht gedrückt war, und jetzt gedrückt ist
+    zuendverz_micros = zuendverz_micros - zuendverz_schrittweite; //Zündverzögerung senken
   }
 
-  if (Taster_2_aktuell && !Taster_2_prev){
-    zuendverz_micros = zuendverz_micros + zuendverz_schrittweite;
+  if (Taster_2_aktuell && !Taster_2_prev){     //wenn Taster 2 vorher nicht gedrückt war, und jetzt gedrückt ist
+    zuendverz_micros = zuendverz_micros + zuendverz_schrittweite; //Zündverzögerung erhöhen
   }
 
-  zuendverz_micros = constrain(zuendverz_micros, 0, 10000);
+  zuendverz_micros = constrain(zuendverz_micros, zuendverz_min, zuendverz_max); //Zündverzögerung auf Halbwelle beschränken
 
-  Taster_1_prev = Taster_1_aktuell;
+  Taster_1_prev = Taster_1_aktuell; //aktuellen Tasterzustand für nächsten Durchlauf speichern
   Taster_2_prev = Taster_2_aktuell;
 
   if (digitalRead(U_null) == LOW) // U_null wird low, Spannungsnulldurchgang steht bevor
