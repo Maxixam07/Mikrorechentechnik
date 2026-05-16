@@ -9,26 +9,32 @@ int U_null_interrupt = 9; // Pin 9, Interruptf¨ahiger Pin: Messung des Spannung
 int LED_1 = 14;           // Pin 14, Ausgangspin: Kann die Led1 an- und ausschalten. Led leuchtet, wenn Pin auf high.
 int LED_2 = 15;           // Pin 15, Ausgangspin: Kann die Led2 an- und ausschalten. Led leuchtet, wenn Pin auf high.
 
-long zuendverz_micros = 0;   // Zündverzögerung in Mikrosekunden, bei 50 Hz ist die Dauer zwischen zwei Nulldurchgängen 10000 Mikrosekunden
 bool Taster_1_prev = false;
 bool Taster_2_prev = false;
-int freq = 50;                    //Frequenz der Versorgungsspannung in Hz
-int zuendwinkel_min = 0;          //Minimal einstellbarer Zündwinkel in Grad
-int zuendwinkel_max = 180;        //Maximal einstellbarer Zündwinkel in Grad
-int zuendwinkel_schrittweite = 5; //Schrittweite des Zündwinkels bei Tastendruck
 
-long halbwelle_micros = 1000000 /(2*freq);
-long zuendverz_min = (long)zuendwinkel_min * halbwelle_micros/180; //Umrechnung Zündwinkel in Zündverzögerung
-long zuendverz_max = (long)zuendwinkel_max* halbwelle_micros/180;
-long zuendverz_schrittweite = (long)zuendwinkel_schrittweite * halbwelle_micros/180;
+long zuendverz_micros = 0; // Zündverzögerung in Mikrosekunden, bei 50 Hz ist die Dauer zwischen zwei Nulldurchgängen 10000 Mikrosekunden
+int freq = 50;                    // Frequenz der Versorgungsspannung in Hz
+int zuendwinkel_min = 0;          // Minimal einstellbarer Zündwinkel in Grad
+int zuendwinkel_max = 180;        // Maximal einstellbarer Zündwinkel in Grad
+int zuendwinkel_schrittweite = 5; // Schrittweite des Zündwinkels bei Tastendruck
 
-volatile bool nulldurchgang = false; //Flag für Nulldurchgang, volatile damit sie in der ISR und in loop funktioniert
+long halbwelle_micros = 1000000 / (2 * freq);
+long zuendverz_min = (long)zuendwinkel_min * halbwelle_micros / 180; // Umrechnung Zündwinkel in Zündverzögerung
+long zuendverz_max = (long)zuendwinkel_max * halbwelle_micros / 180;
+long zuendverz_schrittweite = (long)zuendwinkel_schrittweite * halbwelle_micros / 180;
 
-void nulldurchgang_ISR(){ //Interrupt Service Routine, wird ausgeführt wenn Pin 9 Interrupt wirft
+bool lampe = true;                 //Zustands-Bool Lampe, An oder Aus
+unsigned long letzter_wechsel = 0;   //Zeitstempel des letzten Umschaltens der Lampe
+unsigned long blinken_takt = 1000;  //Dauer eines Zustandes beim Blinken in Millisekunden
+
+volatile bool nulldurchgang = false; // Flag für Nulldurchgang, volatile damit sie in der ISR und in loop funktioniert
+
+void nulldurchgang_ISR()
+{ // Interrupt Service Routine, wird ausgeführt wenn Pin 9 Interrupt wirft
   nulldurchgang = true;
 }
 
-    void setup()
+void setup()
 {
   // Pins initialisieren
   pinMode(Taster_1, INPUT);
@@ -39,33 +45,49 @@ void nulldurchgang_ISR(){ //Interrupt Service Routine, wird ausgeführt wenn Pin
   pinMode(LED_1, OUTPUT);
   pinMode(LED_2, OUTPUT);
 
-  attachInterrupt(digitalPinToInterrupt(U_null_interrupt), nulldurchgang_ISR, RISING); //Interrupt
+  attachInterrupt(digitalPinToInterrupt(U_null_interrupt), nulldurchgang_ISR, RISING); // Interrupt
 }
 
 void loop()
 {
-  bool Taster_1_aktuell = digitalRead(Taster_1); //aktuellen Zustand der Taster in bool speichern
+  bool Taster_1_aktuell = digitalRead(Taster_1); // aktuellen Zustand der Taster in bool speichern
   bool Taster_2_aktuell = digitalRead(Taster_2);
 
-  if (Taster_1_aktuell && !Taster_1_prev){      //wenn Taster 1 vorher nicht gedrückt war, und jetzt gedrückt ist
-    zuendverz_micros = zuendverz_micros - zuendverz_schrittweite; //Zündverzögerung senken
+//BLINKEN
+  unsigned long zeit_aktuell = millis(); //Aktuellen Zeitstempel speichern
+  if (zeit_aktuell - letzter_wechsel >= blinken_takt){ //Vergleichen, ob zwischen jetzt und letztem Wechsel das Intervall vergangen ist
+    letzter_wechsel = zeit_aktuell;                    
+    lampe = !lampe;
   }
 
-  if (Taster_2_aktuell && !Taster_2_prev){     //wenn Taster 2 vorher nicht gedrückt war, und jetzt gedrückt ist
-    zuendverz_micros = zuendverz_micros + zuendverz_schrittweite; //Zündverzögerung erhöhen
+
+//DIMMEN
+  if (Taster_1_aktuell && !Taster_1_prev)
+  {                                                               // wenn Taster 1 vorher nicht gedrückt war, und jetzt gedrückt ist
+    zuendverz_micros = zuendverz_micros - zuendverz_schrittweite; // Zündverzögerung senken
   }
 
-  zuendverz_micros = constrain(zuendverz_micros, zuendverz_min, zuendverz_max); //Zündverzögerung auf Halbwelle beschränken
+  if (Taster_2_aktuell && !Taster_2_prev)
+  {                                                               // wenn Taster 2 vorher nicht gedrückt war, und jetzt gedrückt ist
+    zuendverz_micros = zuendverz_micros + zuendverz_schrittweite; // Zündverzögerung erhöhen
+  }
 
-  Taster_1_prev = Taster_1_aktuell; //aktuellen Tasterzustand für nächsten Durchlauf speichern
+  zuendverz_micros = constrain(zuendverz_micros, zuendverz_min, zuendverz_max); // Zündverzögerung auf Halbwelle beschränken
+
+  Taster_1_prev = Taster_1_aktuell; // aktuellen Tasterzustand für nächsten Durchlauf speichern
   Taster_2_prev = Taster_2_aktuell;
 
-  if (nulldurchgang)
+
+  //LAMPE ANSTEUERN
+  if (nulldurchgang)                       //Timing der Zündlogik über Interrupt
   {
-    nulldurchgang = false;                 //Flag zurücksetzen
-    delayMicroseconds(zuendverz_micros);  //Zuendverzoegerung abwarten
-    digitalWrite(iG_out, HIGH);           //Triac einschalten
-    delayMicroseconds(10);                //Warten bis Einraststrom erreicht
-    digitalWrite(iG_out, LOW);            //Triac Gatestrom wegnehmen
+    nulldurchgang = false;                 // Flag zurücksetzen
+    if (lampe)                             //Lampe nur ansteuern, wenn Sie gemäß Blinkzyklus leuchten sollte
+    {                                      
+      delayMicroseconds(zuendverz_micros); // Zuendverzoegerung abwarten
+      digitalWrite(iG_out, HIGH);          // Triac einschalten
+      delayMicroseconds(10);               // Warten bis Einraststrom erreicht
+      digitalWrite(iG_out, LOW);           // Triac Gatestrom wegnehmen
+    } 
   }
 }
